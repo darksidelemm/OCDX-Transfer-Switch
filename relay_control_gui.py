@@ -1,17 +1,17 @@
 #	OCDX Relay Control GUI
-#	Mark Jessop 2016 <vk5qi@rfhead.net>
+#	Mark Jessop 2018 <vk5qi@rfhead.net>
 #
 #	On Windows,Installing Anaconda Python (http://continuum.io/downloads) will give you the necessary dependencies.
-# 	Otherwise, you need PyQt4.
+# 	Otherwise, you need PyQt5 and requests.
 
 
-import sys, os, datetime, httplib
-from PyQt4 import QtGui, QtCore
+import sys, os, datetime, requests
+from PyQt5 import QtGui, QtCore, QtWidgets
 
 # IP Address of the ESP8266. 
 # In this case it's getting an IP via DHCP.
+#esp_host = "192.168.200.51"
 esp_host = "10.106.14.100"
-
 # Relay state array
 # Currently only have controls for 3 relays.
 # These correspond to pins 4, 13 and 12 on the "ESP8266 Thing" PCB.
@@ -22,17 +22,17 @@ antenna_state = -1
 
 
 # PyQtGraph Window Setup
-app = QtGui.QApplication([])
+app = QtWidgets.QApplication([])
 
 
 # Create Widgets
 # Text field to put some basic info into.
-relayDescriptionLabel = QtGui.QLabel("Waiting for first update...")
+relayDescriptionLabel = QtWidgets.QLabel("Waiting for first update...")
 relayDescriptionLabel.setWordWrap(True)
 # Buttons
-antenna0btn = QtGui.QPushButton("Antenna A")
-antenna1btn = QtGui.QPushButton("Antenna B")
-relay2btn = QtGui.QPushButton("Spare Relay")
+antenna0btn = QtWidgets.QPushButton("Antenna A")
+antenna1btn = QtWidgets.QPushButton("Antenna B")
+relay2btn = QtWidgets.QPushButton("Spare Relay")
 # Make all buttons default to red.
 antenna0btn.setStyleSheet("background-color: red");
 antenna1btn.setStyleSheet("background-color: red");
@@ -60,11 +60,9 @@ def updateButtons():
 def read_status():
 	global antenna_state, relay_states
 	try:
-		conn = httplib.HTTPConnection(esp_host,timeout=3)
-		conn.request("GET","/read")
-		data = conn.getresponse().read()
+		_r = requests.get("http://"+esp_host+"/read", timeout=3)
+		data = _r.text
 		relayDescriptionLabel.setText(data)
-		conn.close()
 		relay_data = data.split("\n")[2]
 		antenna_data = data.split("\n")[3]
 		rssi_data = data.split("\n")[4]
@@ -79,9 +77,9 @@ def read_status():
 			antenna_state = int(antenna_data.split(",")[1])
 
 		updateButtons()
-	except:
+	except Exception as e:
 		# TODO: Make this a bit more descriptive...
-		relayDescriptionLabel.setText("Communication Error!")
+		relayDescriptionLabel.setText("Communication Error - %s" % str(e))
 
 # Toggle the state of a relay.
 def toggle_state(relay_number):
@@ -90,11 +88,9 @@ def toggle_state(relay_number):
 
 	try:
 		request_str = "/relay%d/%d" % (relay_number,new_state)
-		conn = httplib.HTTPConnection(esp_host,timeout=1)
-		conn.request("GET",request_str)
-		data = conn.getresponse().read()
+		_r = requests.get("http://"+esp_host+request_str, timeout=3)
+		data = _r.text
 		relayDescriptionLabel.setText(data)
-		conn.close()
 		if "STATE" in data:
 			relay_states[relay_number] = new_state
 			return
@@ -106,11 +102,9 @@ def select_antenna(antenna_number):
 
 	try:
 		request_str = "/antenna/%d" % (antenna_number)
-		conn = httplib.HTTPConnection(esp_host,timeout=1)
-		conn.request("GET",request_str)
-		data = conn.getresponse().read()
+		_r = requests.get("http://"+esp_host+request_str, timeout=3)
+		data = _r.text
 		relayDescriptionLabel.setText(data)
-		conn.close()
 		if "ANTENNA" in data:
 			antenna_state = antenna_number
 			return
@@ -137,11 +131,11 @@ def relay2btnClicked():
 relay2btn.clicked.connect(relay2btnClicked)
 
 # Create and Lay-out window
-win = QtGui.QWidget()
+win = QtWidgets.QWidget()
 win.resize(500,200)
 win.show()
-win.setWindowTitle("OCDX 40m Antenna Controller")
-layout = QtGui.QGridLayout()
+win.setWindowTitle("AREG OCDX 40m Antenna Controller")
+layout = QtWidgets.QGridLayout()
 win.setLayout(layout)
 # Add Widgets
 layout.addWidget(antenna0btn,0,0)
@@ -152,11 +146,11 @@ layout.addWidget(relayDescriptionLabel,1,0,1,3)
 # Start a timer to attempt to read the remote station status every 5 seconds.
 timer = QtCore.QTimer()
 timer.timeout.connect(read_status)
-timer.start(5000)
+timer.start(2000)
 
 ## Start Qt event loop unless running in interactive mode or using pyside.
 if __name__ == '__main__':
 	if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
-		QtGui.QApplication.instance().exec_()
+		QtWidgets.QApplication.instance().exec_()
 
 
